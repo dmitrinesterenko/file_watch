@@ -1,28 +1,26 @@
 --[[
    License: MIT
    Author: Dmitri Nesterenko
-   based on: watchman
+   Derived from and based on: github.com/miGlanz/watchman and lfs
 --]]
 require('ev')
+require('lfs')
+require('sha2')
+
 local LOOP = ev.Loop.default
 
 function watch_path(path, callback)
-    print('watching the path ' .. path)
+    print('watching path' .. path)
     local stat = ev.Stat.new(function(loop, stat, revents)
         local data = stat:getdata()
         print(data)
         callback(data.path, data.attr, data.prev)
     end, path)
     stat:start(LOOP)
-
-    ---- TODO: normalize path
-    --path_register.add(path, callback, function()
-    --    print(path)
-    --    stat:stop(LOOP)
-    --end)
 end
 
 function watch_contents(path, callback, ignore_missing)
+    print('watching contents ' .. path)
     local function file_hash()
         local f = io.open(path)
         if (f) then
@@ -48,15 +46,48 @@ function watch_contents(path, callback, ignore_missing)
         end
     end, path)
     stat:start(LOOP)
+end
 
-    --contents_register.add(path, callback, function()
-    --    stat:stop(LOOP)
-    --end)
+function watch_directory (path, callback)
+  for file in lfs.dir(path) do
+      if file ~= "." and file ~= ".." then
+          local f = path..'/'..file
+          local attr = lfs.attributes (f)
+          assert (type(attr) == "table")
+          if attr.mode == "directory" then
+            watch_path(f, callback)
+            watch_directory (f, callback)
+          else
+            --TODO the attr['change'] can be used to monitor for file changes
+            --more efficiently than calculating a sha2 of all of the content
+            --and comparing that
+            watch_contents(f, callback, true)
+            for name, value in pairs(attr) do
+                  print (name, value)
+            end
+          end
+      end
+  end
+end
+
+function watch_path_and_contents(path, callback)
+  watch_path(path, callback)
+  watch_directory(path, callback)
+end
+
+function start(watch_method, path, callback)
+  ev.Idle.new(function(loop, idle, revents)
+    watch_method(path, callback)
+    idle:stop(LOOP)
+  end):start(LOOP)
+  LOOP:loop()
 end
 
 file_watch = {
   watch_path = watch_path,
-  watch_contents = watch_contents
+  watch_contents = watch_contents,
+  watch_path_and_contents = watch_path_and_contents,
+  start = start
 }
 
 
