@@ -7,10 +7,12 @@ require('ev')
 require('lfs')
 require('sha2')
 
-local LOOP = ev.Loop.default
+local LOOP = ev.Loop.new()
 
 function watch_path(path, callback)
-    print('watching path' .. path)
+    if(DEBUG) then
+      print('watching path' .. path)
+    end
     local stat = ev.Stat.new(function(loop, stat, revents)
         local data = stat:getdata()
         print(data)
@@ -20,7 +22,9 @@ function watch_path(path, callback)
 end
 
 function watch_contents(path, callback, ignore_missing)
-    print('watching contents ' .. path)
+    if(DEBUG) then
+      print('watching contents ' .. path)
+    end
     local function file_hash()
         local f = io.open(path)
         if (f) then
@@ -62,9 +66,9 @@ function watch_directory (path, callback)
             --more efficiently than calculating a sha2 of all of the content
             --and comparing that
             watch_contents(f, callback, true)
-            for name, value in pairs(attr) do
-                  print (name, value)
-            end
+            --for name, value in pairs(attr) do
+            --      print (name, value)
+            --end
           end
       end
   end
